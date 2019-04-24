@@ -83,14 +83,33 @@ namespace kagome::primitives {
 
   outcome::result<BlockHeader> ScaleCodecImpl::decodeBlockHeader(
       Stream &stream) const {
-    OUTCOME_TRY(parent_hash, decodeCollection<uint8_t>(stream));
-    OUTCOME_TRY(number, decodeUint64(stream));
-    OUTCOME_TRY(state_root, decodeCollection<uint8_t>(stream));
-    OUTCOME_TRY(extrinsics_root, decodeCollection<uint8_t>(stream));
+    std::array<uint8_t, 32> parent_hash_array{};
+    for (int i = 0; i < 32; i++) {
+      OUTCOME_TRY(byte, scale::fixedwidth::decodeUint8(stream));
+      gsl::at(parent_hash_array, i) = byte;
+    }
+    Buffer parent_hash(parent_hash_array);
+
+    OUTCOME_TRY(number, decodeInteger(stream));
+
+    std::array<uint8_t, 32> state_root_array{};
+    for (int i = 0; i < 32; i++) {
+      OUTCOME_TRY(byte, scale::fixedwidth::decodeUint8(stream));
+      gsl::at(state_root_array, i) = byte;
+    }
+    Buffer state_root(state_root_array);
+
+    std::array<uint8_t, 32> extrinsics_root_array{};
+    for (int i = 0; i < 32; i++) {
+      OUTCOME_TRY(byte, scale::fixedwidth::decodeUint8(stream));
+      gsl::at(extrinsics_root_array, i) = byte;
+    }
+    Buffer extrinsics_root(extrinsics_root_array);
     OUTCOME_TRY(digest, decodeCollection<uint8_t>(stream));
 
-    return BlockHeader(Buffer{parent_hash}, number, Buffer{state_root},
-                       Buffer{extrinsics_root}, Buffer{digest});
+    return BlockHeader(Buffer{parent_hash}, number.convert_to<uint64_t>(),
+                       Buffer{state_root}, Buffer{extrinsics_root},
+                       Buffer{digest});
   }
 
   outcome::result<Buffer> ScaleCodecImpl::encodeExtrinsic(
