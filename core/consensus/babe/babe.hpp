@@ -68,14 +68,18 @@ namespace kagome::consensus::babe {
       auto r = randomness_map_[current_epoch_];
       auto slot_leadership = slotLeadership(r, config.number_of_slots);
 
-      timer_.async_wait(std::bind(runSlot, boost::asio::placeholders::error,
-                                  config, 0, slot_leadership, epoch_start));
+      //      timer_.async_wait(std::bind(runSlot,
+      //      boost::asio::placeholders::error,
+      //                                  config, 0, slot_leadership,
+      //                                  epoch_start));
+      runSlot(boost::system::error_code{}, config, 0, slot_leadership,
+              epoch_start);
     }
 
     void runSlot(const boost::system::error_code &, const BabeConfig &config,
                  SlotNum slot_number,
                  const std::vector<VRFOutput> &slot_leadership,
-                 boost::posix_time::ptime &epoch_start) {
+                 boost::posix_time::ptime &slot_start) {
       if (slot_number < config.number_of_slots) {
         std::cout << "run slot " << slot_number << std::endl;
 
@@ -85,11 +89,10 @@ namespace kagome::consensus::babe {
         }
 
         timer_.expires_at(
-            epoch_start
-            + boost::posix_time::milliseconds(config.slot_duration));
+            slot_start + boost::posix_time::milliseconds(config.slot_duration));
         timer_.async_wait(std::bind(runSlot, boost::asio::placeholders::error,
                                     config, slot_number + 1, slot_leadership,
-                                    epoch_start));
+                                    slot_start));
         return;
       }
       // else end of epoch
@@ -98,8 +101,7 @@ namespace kagome::consensus::babe {
     }
 
     void runLeader(size_t slot_number) {
-      auto txs = pool_->consumeTransactions();
-      auto block = createBlock(txs);
+      auto block = proposer_->prepareBlock();
       auto babe_header = getHeader(slot_number);
 
       auto encoded_res = scale::encode(block, babe_header);
@@ -125,7 +127,7 @@ namespace kagome::consensus::babe {
 
     Babe() {
       randomness_map_[0] = 0;
-      randomness_map_[1] = 0;
+      randomness_map_[1] = 0;  // ?
 
       network.onReceiveBlock([](Block block) {
         if (validate(block)) {
@@ -138,7 +140,13 @@ namespace kagome::consensus::babe {
 
    private:
     std::vector<VRFOutput> slotLeadership(size_t random_value,
-                                          size_t slots_number);
+                                          size_t slots_number) {
+      std::vector<VRFOutput> res;
+      for (size_t i = 0; i < slots_number; i++) {
+        res[i] = vrf(concat(random_value, i));
+      }
+      return res;
+    }
 
     Chain chain_;
     boost::asio::deadline_timer timer_;
