@@ -9,6 +9,7 @@
 #include "network/types/block_announce.hpp"
 #include "network/types/block_request.hpp"
 #include "network/types/block_response.hpp"
+#include "network/types/consensus_message.hpp"
 
 namespace kagome::network {
 
@@ -31,6 +32,13 @@ namespace kagome::network {
      */
     virtual void blockAnnounce(
         BlockAnnounce block_announce,
+        std::function<void(const outcome::result<void> &)> handler) const = 0;
+
+    /**
+     * Propagate consensus message
+     */
+    virtual void consensusMsg(
+        ConsensusMessage msg,
         std::function<void(const outcome::result<void> &)> handler) const = 0;
   };
 

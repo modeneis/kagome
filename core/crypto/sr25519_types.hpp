@@ -3,8 +3,8 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-#ifndef KAGOME_CORE_CRYPTO_VRF_TYPES
-#define KAGOME_CORE_CRYPTO_VRF_TYPES
+#ifndef KAGOME_CORE_SR25519_TYPES
+#define KAGOME_CORE_SR25519_TYPES
 
 extern "C" {
 #include <sr25519/sr25519.h>
@@ -73,4 +73,4 @@ namespace kagome::crypto {
 
 }  // namespace kagome::crypto
 
-#endif  // KAGOME_CORE_CRYPTO_VRF_TYPES
+#endif  // KAGOME_CORE_SR25519_TYPES
