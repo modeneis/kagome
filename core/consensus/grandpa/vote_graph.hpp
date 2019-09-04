@@ -103,7 +103,7 @@ namespace kagome::consensus::grandpa {
     virtual outcome::result<void> append(const BlockInfo &block,
                                          std::shared_ptr<Chain> chain) = 0;
 
-   private:
+   protected:
     BlockInfo base_;
   };
 

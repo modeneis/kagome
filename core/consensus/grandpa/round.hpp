@@ -25,7 +25,6 @@ namespace kagome::consensus::grandpa {
   };
 
   using VotersSet = std::unordered_set<Id>;
-  using BitfieldContext = int;  // TODO(warchant): figure out what is that
 
   struct RoundState {
     // TODO(warchant): complete

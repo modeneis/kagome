@@ -47,12 +47,12 @@ namespace kagome::consensus::grandpa {
 
     /// Proof of an equivocation (double-vote) in a given round.
     template <typename Message>
-    struct Equivocation {  // NOLINT
+    struct EquivocationProof {  // NOLINT
       /// The round number equivocated in.
       RoundNumber round;
       /// The identity of the equivocator.
       Id id;
-      Equivocated<Message> proof;
+      Equivocated<SignedMessage<Message>> proof;
     };
   }  // namespace detail
 
@@ -71,8 +71,8 @@ namespace kagome::consensus::grandpa {
     std::vector<SignedPrecommit> precommits;
   };
 
-  using PrevoteEquivocation = detail::Equivocation<Prevote>;
-  using PrecommitEquivocation = detail::Equivocation<Precommit>;
+  using PrevoteEquivocation = detail::EquivocationProof<Prevote>;
+  using PrecommitEquivocation = detail::EquivocationProof<Precommit>;
 
   struct HistoricalVotes {
     std::vector<SignedPrevote> prevotes_seen;
