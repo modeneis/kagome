@@ -18,6 +18,23 @@ namespace kagome::consensus::grandpa {
       std::vector<BlockHash> ancestors;
       std::vector<BlockHash> descendents;
       // cumulative vote?
+
+      boost::optional<BlockHash> ancestorBlock(BlockNumber rnumber) const {
+        if (rnumber >= number) {
+          return boost::none;
+        }
+
+        auto offset = number.unwrap() - rnumber.unwrap() - 1;
+
+        return ancestors[offset];
+      };
+
+      boost::optional<BlockHash> ancestorBlock() const {
+        if (ancestors.empty()) {
+          return boost::none;
+        }
+        return ancestors.back();
+      }
     };
 
     struct Subchain {
@@ -29,11 +46,7 @@ namespace kagome::consensus::grandpa {
 
     using Condition = std::function<bool(/*vote weight*/)>;
 
-    explicit VoteGraph(const BlockInfo &base) : base_(base) {}
-
-    const auto &getBase() const {
-      return base_;
-    }
+    const BlockInfo &getBase() const;
 
     /// Adjust the base of the graph. The new base must be an ancestor of the
     /// old base.
@@ -45,6 +58,7 @@ namespace kagome::consensus::grandpa {
     /// Insert a vote with given value into the graph at given hash and number.
     virtual outcome::result<void> insert(
         const BlockInfo &block,
+
         /*vote weight */ std::shared_ptr<Chain> chain) = 0;
 
     /// Find the highest block which is either an ancestor of or equal to the
@@ -100,9 +114,6 @@ namespace kagome::consensus::grandpa {
     // no node in the tree keeps the target anyway.
     virtual outcome::result<void> append(const BlockInfo &block,
                                          std::shared_ptr<Chain> chain) = 0;
-
-   protected:
-    BlockInfo base_;
   };
 
 }  // namespace kagome::consensus::grandpa

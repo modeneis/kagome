@@ -46,9 +46,38 @@ namespace kagome::common {
 
   template <typename T,
             typename Tag,
-            typename std::enable_if<std::is_arithmetic<T>::value>>
+            typename = std::enable_if_t<std::is_arithmetic_v<T>>>
   bool operator<(const Wrapper<T, Tag> &a, const Wrapper<T, Tag> &b) {
     return a.unwrap() < b.unwrap();
+  }
+
+  template <typename T,
+            typename Tag,
+            typename = std::enable_if<std::is_arithmetic<T>::value>>
+  bool operator>(const Wrapper<T, Tag> &a, const Wrapper<T, Tag> &b) {
+    return a.unwrap() > b.unwrap();
+  }
+
+  template <typename T,
+            typename Tag,
+            typename = std::enable_if<std::is_arithmetic<T>::value>>
+  bool operator<=(const Wrapper<T, Tag> &a, const Wrapper<T, Tag> &b) {
+    return a.unwrap() <= b.unwrap();
+  }
+
+  template <typename T,
+            typename Tag,
+            typename = std::enable_if<std::is_arithmetic<T>::value>>
+  bool operator>=(const Wrapper<T, Tag> &a, const Wrapper<T, Tag> &b) {
+    return a.unwrap() >= b.unwrap();
+  }
+
+  template <typename T,
+            typename Tag,
+            typename = std::enable_if<std::is_arithmetic<T>::value>>
+  Wrapper<T, Tag> operator-(const Wrapper<T, Tag> &a,
+                            const Wrapper<T, Tag> &b) {
+    return a.unwrap() - b.unwrap();
   }
 
 }  // namespace kagome::common

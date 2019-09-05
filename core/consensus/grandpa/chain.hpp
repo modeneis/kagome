@@ -10,7 +10,6 @@
 
 #include <boost/optional.hpp>
 #include <outcome/outcome.hpp>
-#include "consensus/grandpa/common.hpp"
 #include "consensus/grandpa/structs.hpp"
 
 namespace kagome::consensus::grandpa {
