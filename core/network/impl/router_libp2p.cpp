@@ -18,7 +18,7 @@ namespace kagome::network {
   RouterLibp2p::RouterLibp2p(
       libp2p::Host &host,
       std::shared_ptr<BabeObserver> babe_observer,
-      std::shared_ptr<consensus::grandpa::Observer> grandpa_observer,
+      std::shared_ptr<consensus::grandpa::RoundObserver> grandpa_observer,
       std::shared_ptr<SyncProtocolObserver> sync_observer,
       common::Logger log)
       : host_{host},

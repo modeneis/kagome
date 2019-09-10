@@ -34,36 +34,42 @@ namespace kagome::consensus::grandpa {
 
   template <typename Message>
   struct Equivocated {
-    Message first;
-    Message second;
+    SignedMessage<Message> first;
+    SignedMessage<Message> second;
   };
 
-  namespace detail {
-    template <typename Tag>
-    struct BlockInfoT {
-      primitives::BlockNumber number;
-      primitives::BlockHash hash;
-    };
+  /// Proof of an equivocation (double-vote) in a given round.
+  template <typename Message>
+  struct EquivocationProof {  // NOLINT
+    /// The round number equivocated in.
+    RoundNumber round{0};
+    /// The identity of the equivocator.
+    Id id;
+    Equivocated<Message> proof;
+  };
 
-    /// Proof of an equivocation (double-vote) in a given round.
-    template <typename Message>
-    struct EquivocationProof {  // NOLINT
-      /// The round number equivocated in.
-      RoundNumber round;
-      /// The identity of the equivocator.
-      Id id;
-      Equivocated<SignedMessage<Message>> proof;
-    };
-  }  // namespace detail
+  template <typename Tag>
+  struct BlockVote {
+    primitives::BlockHash hash;
+    primitives::BlockNumber number;
+  };
 
-  using BlockInfo = detail::BlockInfoT<struct BlockInfoTag>;
-  using Precommit = detail::BlockInfoT<struct PrecommitTag>;
-  using Prevote = detail::BlockInfoT<struct PrevoteTag>;
-  using PrimaryPropose = detail::BlockInfoT<struct PrimaryProposeTag>;
+  using BlockInfo = BlockVote<struct BlockInfoTag>;
+  using Precommit = BlockVote<struct PrecommitTag>;
+  using Prevote = BlockVote<struct PrevoteTag>;
+  using PrimaryPropose = BlockVote<struct PrimaryProposeTag>;
 
   using SignedPrevote = SignedMessage<Prevote>;
   using SignedPrecommit = SignedMessage<Precommit>;
   using SignedPrimaryPropose = SignedMessage<PrimaryPropose>;
+
+  using MembershipCounter =
+      common::Wrapper<uint64_t, struct MembershipCounterTag>;
+
+  MembershipCounter &operator++(MembershipCounter &c) {
+    ++c.unwrap_mutable();
+    return c;
+  }
 
   /// A commit message which is an aggregate of precommits.
   struct Commit {
@@ -71,8 +77,16 @@ namespace kagome::consensus::grandpa {
     std::vector<SignedPrecommit> precommits;
   };
 
-  using PrevoteEquivocation = detail::EquivocationProof<Prevote>;
-  using PrecommitEquivocation = detail::EquivocationProof<Precommit>;
+  struct CatchUp {
+    RoundNumber round;
+    std::vector<SignedPrevote> prevotes;
+    std::vector<SignedPrecommit> precommits;
+    primitives::BlockHash base_hash;
+    primitives::BlockNumber base_number;
+  };
+
+  using PrevoteEquivocation = EquivocationProof<Prevote>;
+  using PrecommitEquivocation = EquivocationProof<Precommit>;
 
   struct HistoricalVotes {
     std::vector<SignedPrevote> prevotes_seen;
@@ -84,35 +98,16 @@ namespace kagome::consensus::grandpa {
 
   // TODO(akvinikym) 04.09.19: implement the SCALE codecs
   template <class Stream,
+            class Tag,
             typename = std::enable_if_t<Stream::is_encoder_stream>>
-  Stream &operator<<(Stream &s, const Precommit &v) {
-    return s;
-  }
-  template <class Stream,
-            typename = std::enable_if_t<Stream::is_decoder_stream>>
-  Stream &operator>>(Stream &s, const Precommit &v) {
+  Stream &operator<<(Stream &s, const BlockVote<Tag> &v) {
     return s;
   }
 
   template <class Stream,
-            typename = std::enable_if_t<Stream::is_encoder_stream>>
-  Stream &operator<<(Stream &s, const Prevote &v) {
-    return s;
-  }
-  template <class Stream,
+            class Tag,
             typename = std::enable_if_t<Stream::is_decoder_stream>>
-  Stream &operator>>(Stream &s, const Prevote &v) {
-    return s;
-  }
-
-  template <class Stream,
-            typename = std::enable_if_t<Stream::is_encoder_stream>>
-  Stream &operator<<(Stream &s, const PrimaryPropose &v) {
-    return s;
-  }
-  template <class Stream,
-            typename = std::enable_if_t<Stream::is_decoder_stream>>
-  Stream &operator>>(Stream &s, const PrimaryPropose &v) {
+  Stream &operator>>(Stream &s, BlockVote<Tag> &v) {
     return s;
   }
 }  // namespace kagome::consensus::grandpa
