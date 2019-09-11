@@ -6,7 +6,7 @@
 #ifndef KAGOME_CORE_CONSENSUS_GRANDPA_ROUND_OBSERVER_HPP
 #define KAGOME_CORE_CONSENSUS_GRANDPA_ROUND_OBSERVER_HPP
 
-#include "consensus/grandpa/structs.hpp"
+#include "consensus/grandpa/message.hpp"
 
 namespace kagome::consensus::grandpa {
 
@@ -17,11 +17,9 @@ namespace kagome::consensus::grandpa {
   struct RoundObserver {
     virtual ~RoundObserver() = default;
 
-    virtual void onPrecommit(Precommit pc) = 0;
+    virtual void onFin(const Fin& f) = 0;
 
-    virtual void onPrevote(Prevote pv) = 0;
-
-    virtual void onPrimaryPropose(PrimaryPropose pv) = 0;
+    virtual void onVote(const Message& msg) = 0;
   };
 
 }  // namespace kagome::consensus::grandpa
