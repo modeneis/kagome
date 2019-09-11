@@ -317,7 +317,7 @@ namespace kagome::blockchain {
     return getChainByBlock(block_hash);
   }
 
-  BlockTree::BlockInfo BlockTreeImpl::deepestLeaf() const {
+  primitives::BlockInfo BlockTreeImpl::deepestLeaf() const {
     auto &&leaf = tree_meta_->deepest_leaf.get();
     return {leaf.depth_, leaf.block_hash_};
   }

@@ -15,20 +15,15 @@
 namespace kagome::consensus::grandpa {
 
   struct Round {
+    std::shared_ptr<VotersSet> voters;
+    MembershipCounter counter;
+    RoundNumber round;
 
-    bool isCompletable() const {
-      return false;
-    };
-
-   private:
-
-    std::shared_ptr<VotersSet> voters_;
-    MembershipCounter counter_;
-    RoundNumber round_;
-
-    std::unique_ptr<VoteTracker> votes_;
-    std::unique_ptr<VoteGraph> graph_;
+    std::unique_ptr<VoteTracker> votes;
+    std::unique_ptr<VoteGraph> graph;
   };
+
+
 
 }  // namespace kagome::consensus::grandpa
 

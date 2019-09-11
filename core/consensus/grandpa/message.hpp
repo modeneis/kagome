@@ -8,28 +8,23 @@
 
 #include "common/wrapper.hpp"
 #include "primitives/common.hpp"
+#include <boost/variant.hpp>
 
 namespace kagome::consensus::grandpa {
 
-  using Id = common::Wrapper<std::vector<uint8_t>, struct PublicKeyTag>;
+  using Id = primitives::AuthorityId;
   using Signature = common::Wrapper<std::vector<uint8_t>, struct SignatureTag>;
   using BlockHash = primitives::BlockHash;
   using BlockNumber = primitives::BlockNumber;
   using RoundNumber = uint64_t;
   using MembershipCounter = uint64_t;
 
-  struct BlockInfo {
-    BlockHash hash;
-    BlockNumber number;
-  };
+  using BlockInfo = primitives::BlockInfo;
 
-  struct Vote {
-    enum class Type { PREVOTE = 0, PRECOMMIT = 1 };
+  struct Prevote: public BlockInfo {};
+  struct Precommit: public BlockInfo {};
 
-    Type type;
-    BlockHash hash;
-    BlockNumber number;
-  };
+  using Vote = boost::variant<Prevote, Precommit>;
 
   struct SignedVote {
     Vote vote;
@@ -39,29 +34,22 @@ namespace kagome::consensus::grandpa {
 
   // justification for block B in round r
   struct Justification {
-    struct Item {
-      Vote vote;  // vote for block that is higher than B
-      Id signer;
-      // signature of voter 'signer' broadcasted during pre-commit subround of
-      // round r
-      Signature signature;
-    };
-
-    std::vector<Item> items;
+    std::vector<SignedVote> items;
   };
 
   // finalizing message or block B in round r
   struct Fin {
     RoundNumber round{0};
-    Vote vote;
+    BlockInfo vote;
     Justification justification;
   };
 
+  // either prevote or precommit
   struct Message {
     RoundNumber round{0};
+    MembershipCounter counter{0};
     Id id;
     SignedVote vote;
-    MembershipCounter counter{0};
   };
 
 }  // namespace kagome::consensus::grandpa

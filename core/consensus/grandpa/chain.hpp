@@ -10,7 +10,7 @@
 
 #include <boost/optional.hpp>
 #include <outcome/outcome.hpp>
-#include "consensus/grandpa/structs.hpp"
+#include "consensus/grandpa/message.hpp"
 
 namespace kagome::consensus::grandpa {
 
@@ -23,8 +23,8 @@ namespace kagome::consensus::grandpa {
      * {@param base} hash. Should be in reverse order from block's parent.
      * @return If the block is not a descendent of base, returns an error.
      */
-    virtual outcome::result<std::vector<primitives::BlockHash>> ancestry(
-        primitives::BlockHash base, primitives::BlockHash block) = 0;
+    virtual outcome::result<std::vector<BlockHash>> ancestry(
+        BlockHash base, BlockHash block) = 0;
 
     /**
      * @returns the hash of the best block whose chain contains the given
@@ -32,14 +32,14 @@ namespace kagome::consensus::grandpa {
      * unknown, return None.
      */
     virtual boost::optional<BlockInfo> bestChainContaining(
-        primitives::BlockHash base) = 0;
+        BlockHash base) = 0;
 
     /**
      * @returns true if {@param block} is a descendent of or equal to the
      * given {@param base}.
      */
-    bool isEqualOrDescendOf(primitives::BlockHash base,
-                            primitives::BlockHash block) {
+    bool isEqualOrDescendOf(BlockHash base,
+                            BlockHash block) {
       return base == block ? true : ancestry(base, block).has_value();
     }
   };
