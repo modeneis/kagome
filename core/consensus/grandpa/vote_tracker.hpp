@@ -29,6 +29,8 @@ namespace kagome::consensus::grandpa {
     // total number of observed votes for block B {hash, number} in round R
     // includes votes for B and all its descendants
     virtual size_t getTotalVotes(BlockHash hash, BlockNumber number) = 0;
+
+    virtual Justification getJustification(const BlockInfo& info) = 0;
   };
 
 }  // namespace kagome::consensus::grandpa

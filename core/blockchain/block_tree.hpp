@@ -13,6 +13,7 @@
 #include "primitives/block.hpp"
 #include "primitives/block_id.hpp"
 #include "primitives/justification.hpp"
+#include "primitives/common.hpp"
 
 namespace kagome::blockchain {
   /**
@@ -112,22 +113,13 @@ namespace kagome::blockchain {
     virtual BlockHashVecRes longestPath() = 0;
 
     /**
-     * Represents block information, including block number and hash.
-     * Don't keep hash reference, make a copy if you need it.
-     */
-    struct BlockInfo {
-      primitives::BlockNumber block_number{};
-      primitives::BlockHash block_hash;
-    };
-
-    /**
      * Get a deepest leaf of the tree
      * @return deepest leaf
      *
      * @note deepest leaf is also a result of "SelectBestChain": if we are the
      * leader, we connect a block, which we constructed, to that deepest leaf
      */
-    virtual BlockInfo deepestLeaf() const = 0;
+    virtual primitives::BlockInfo deepestLeaf() const = 0;
 
     /**
      * Get all leaves of our tree

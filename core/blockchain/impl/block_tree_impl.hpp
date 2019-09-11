@@ -111,13 +111,13 @@ namespace kagome::blockchain {
 
     BlockHashVecRes longestPath() override;
 
-    BlockInfo deepestLeaf() const override;
+    primitives::BlockInfo deepestLeaf() const override;
 
     std::vector<primitives::BlockHash> getLeaves() const override;
 
     BlockHashVecRes getChildren(const primitives::BlockHash &block) override;
 
-    primitives::BlockHash getLastFinalized() const override;
+    primitives::BlockInfo getLastFinalized() const override;
 
     void prune() override;
 
