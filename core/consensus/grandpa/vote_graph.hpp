@@ -12,12 +12,13 @@
 namespace kagome::consensus::grandpa {
 
   struct VoteGraph {
+    using CumulativeVote = uint32_t;
     // graph entry
     struct Entry {
       BlockNumber number;
       std::vector<BlockHash> ancestors;
       std::vector<BlockHash> descendents;
-      // cumulative vote?
+      CumulativeVote cumulative_vote;
     };
 
     struct Subchain {
@@ -27,7 +28,7 @@ namespace kagome::consensus::grandpa {
 
     virtual ~VoteGraph() = default;
 
-    using Condition = std::function<bool(/*vote weight*/)>;
+    using Condition = std::function<bool(CumulativeVote)>;
 
     explicit VoteGraph(const BlockInfo &base) : base_(base) {}
 
@@ -40,13 +41,12 @@ namespace kagome::consensus::grandpa {
     ///
     /// Provide an ancestry proof from the old base to the new. The proof
     /// should be in reverse order from the old base's parent.
-    virtual void adjustBase(
-        std::vector<BlockHash> ancestry_proof) = 0;
+    virtual void adjustBase(std::vector<BlockHash> ancestry_proof) = 0;
 
     /// Insert a vote with given value into the graph at given hash and number.
-    virtual outcome::result<void> insert(
-        const BlockInfo &block,
-        /*vote weight */ std::shared_ptr<Chain> chain) = 0;
+    /// Increases cumulative vote by 1 for the given block
+    virtual outcome::result<void> insert(const BlockInfo &block
+                                         /*vote weight */) = 0;
 
     /// Find the highest block which is either an ancestor of or equal to the
     /// given, which fulfills a condition.
@@ -67,7 +67,9 @@ namespace kagome::consensus::grandpa {
     /// Returns `None` when the given `current_best` does not fulfill the
     /// condition.
     virtual boost::optional<BlockInfo> findGhost(const BlockInfo &current_best,
-                                                 Condition cond) = 0;
+                                                 Condition cond = [](auto &&) {
+                                                   return true;
+                                                 }) = 0;
 
     // given a key, node pair (which must correspond), assuming this node
     // fulfills the condition, this function will find the highest point at
@@ -82,8 +84,8 @@ namespace kagome::consensus::grandpa {
     // returns `None` if there is a node by that key already, and a vector
     // (potentially empty) of nodes with the given block in its ancestor-edge
     // otherwise.
-    virtual boost::optional<std::vector<BlockHash>>
-    findContainingNodes(const BlockInfo &block) = 0;
+    virtual boost::optional<std::vector<BlockHash>> findContainingNodes(
+        const BlockInfo &block) = 0;
 
     // introduce a branch to given vote-nodes.
     //
@@ -93,10 +95,9 @@ namespace kagome::consensus::grandpa {
     // This function panics if any member of `descendents` is not a vote-node
     // or does not have ancestor with given hash and number OR if
     // `ancestor_hash` is already a known entry.
-    virtual void introduceBranch(
-        const std::vector<BlockHash> &descendents,
-        BlockHash ancestor,
-        BlockNumber ancestor_number) = 0;
+    virtual void introduceBranch(const std::vector<BlockHash> &descendents,
+                                 BlockHash ancestor,
+                                 BlockNumber ancestor_number) = 0;
 
     // append a vote-node onto the chain-tree. This should only be called if
     // no node in the tree keeps the target anyway.

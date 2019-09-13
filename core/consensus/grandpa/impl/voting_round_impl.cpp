@@ -3,4 +3,4 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-#include "grandpa_voter_impl.hpp"
+#include "voting_round_impl.hpp"
