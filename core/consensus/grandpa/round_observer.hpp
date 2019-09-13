@@ -19,7 +19,7 @@ namespace kagome::consensus::grandpa {
 
     virtual void onFin(const Fin& f) = 0;
 
-    virtual void onVote(const Message& msg) = 0;
+    virtual void onVoteMessage(const VoteMessage &msg) = 0;
   };
 
 }  // namespace kagome::consensus::grandpa

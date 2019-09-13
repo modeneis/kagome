@@ -138,7 +138,7 @@ namespace kagome::blockchain {
      * Get the last finalized block
      * @return hash of the block
      */
-    virtual primitives::BlockHash getLastFinalized() const = 0;
+    virtual primitives::BlockInfo getLastFinalized() const = 0;
 
     /**
      * Prune the tree in both memory and storage, removing all blocks, which are
