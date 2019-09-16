@@ -25,36 +25,81 @@ namespace kagome::consensus::grandpa {
    public:
     ~VotingRoundImpl() override = default;
 
-    VotingRoundImpl(std::shared_ptr<Clock> clock)
-        : clock_(std::move(clock)), state_{State::START} {
+    VotingRoundImpl(std::shared_ptr<VoterSet> voters,
+                    RoundNumber round_number,
+                    Duration duration,
+                    TimePoint start_time,
+                    MembershipCounter counter,
+                    Id id,
+                    VoteGraph::CumulativeVote threshold,
+                    std::unique_ptr<VoteTracker> tracker,
+                    std::unique_ptr<VoteGraph> graph,
+                    std::shared_ptr<Gossiper> gossiper,
+                    std::shared_ptr<Clock> clock,
+                    std::shared_ptr<blockchain::BlockTree> block_tree,
+                    Timer timer,
+                    common::Logger logger = common::createLogger("Grandpa"))
+        : voters_{std::move(voters)},
+          round_number_{round_number},
+          duration_{duration},
+          start_time_{start_time},
+          counter_{counter},
+          id_{id},
+          state_{State::START},
+          threshold_{threshold},
+          tracker_{std::move(tracker)},
+          graph_{std::move(graph)},
+          gossiper_{std::move(gossiper)},
+          clock_{std::move(clock)},
+          block_tree_{std::move(block_tree)},
+          timer_{std::move(timer)},
+          logger_{std::move(logger)} {
+      BOOST_ASSERT(voters_ != nullptr);
+      BOOST_ASSERT(tracker_ != nullptr);
+      BOOST_ASSERT(graph_ != nullptr);
       BOOST_ASSERT(clock_ != nullptr);
+      BOOST_ASSERT(block_tree_ != nullptr);
 
       threshold_ = getThreshold(voters_);
     }
 
     static VoteGraph::CumulativeVote getThreshold(
-        std::shared_ptr<VoterSet> voters) {
+        const std::shared_ptr<VoterSet> &voters) {
       return (voters->size() / 2) * 3;
     }
 
     void onFin(const Fin &f) override {
       switch (state_) {
-        case State::START: {
-          break;
-        }
+        case State::START:
         case State::PREVOTED:
-          // TODO: finalize for now, check later
+          break;
         case State::PRECOMMITTED: {
-          // TODO: Finalize message
+          tryFinalize();
         }
       }
     }
 
-    template <typename T, typename V>
-    boost::optional<T> getFromVariant(const V &variant) {
-      return visit_in_place(variant,
-                            [](const T &t) { return t; },
-                            [](const auto &) { return boost::none; });
+    void tryFinalize() {
+      auto l = block_tree_->getLastFinalized();
+      auto e = bestFinalCandidate(round_number_);
+
+      if (e.block_number > l.block_number) {
+        if (graph_->findGhost(
+                e, [this](const VoteGraph::CumulativeVote &cumulative_vote) {
+                  return cumulative_vote > threshold_;
+                })) {
+          auto justification = tracker_->getJustification(e);
+
+          auto finalized =
+              block_tree_->finalize(e.block_hash, std::move(justification));
+          if (not finalized) {
+            logger_->warn(
+                "Could not finalize message during round {}. Error: {}",
+                round_number_,
+                finalized.error().error_message());
+          }
+        }
+      }
     }
 
     void onVoteMessage(const VoteMessage &vote_message) override {
@@ -89,6 +134,10 @@ namespace kagome::consensus::grandpa {
           onVote<SignedPrecommit>(precommit);
 
           break;
+        }
+
+        case State::PRECOMMITTED: {
+          tryFinalize();
         }
       }
     }
@@ -258,7 +307,7 @@ namespace kagome::consensus::grandpa {
     RoundNumber round_number_;
     Duration duration_;  // length of round (T in spec)
     TimePoint start_time_;
-    MembershipCounter counter_{0};
+    MembershipCounter counter_;
     Id id_;  // id of current peer
     State state_;
     VoteGraph::CumulativeVote threshold_;
@@ -267,7 +316,6 @@ namespace kagome::consensus::grandpa {
     std::unique_ptr<VoteGraph> graph_;
 
     std::shared_ptr<Gossiper> gossiper_;
-    std::shared_ptr<RoundObserver> observer_;
     std::shared_ptr<Clock> clock_;
     std::shared_ptr<blockchain::BlockTree> block_tree_;
 

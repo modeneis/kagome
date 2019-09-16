@@ -36,13 +36,6 @@ namespace kagome::consensus::grandpa {
       return base_;
     }
 
-    /// Adjust the base of the graph. The new base must be an ancestor of the
-    /// old base.
-    ///
-    /// Provide an ancestry proof from the old base to the new. The proof
-    /// should be in reverse order from the old base's parent.
-    virtual void adjustBase(std::vector<BlockHash> ancestry_proof) = 0;
-
     /// Insert a vote with given value into the graph at given hash and number.
     /// Increases cumulative vote by 1 for the given block
     virtual outcome::result<void> insert(const BlockInfo &block
@@ -50,8 +43,9 @@ namespace kagome::consensus::grandpa {
 
     /// Find the highest block which is either an ancestor of or equal to the
     /// given, which fulfills a condition.
-    virtual boost::optional<BlockInfo> findAncestor(const BlockInfo &block,
-                                                    Condition cond) = 0;
+    virtual boost::optional<BlockInfo> findAncestor(
+        const BlockInfo &block,
+        Condition cond = [](auto &&) { return true; }) = 0;
 
     /// Find the best GHOST descendent of the given block.
     /// Pass a closure used to evaluate the cumulative vote value.
@@ -71,38 +65,6 @@ namespace kagome::consensus::grandpa {
                                                    return true;
                                                  }) = 0;
 
-    // given a key, node pair (which must correspond), assuming this node
-    // fulfills the condition, this function will find the highest point at
-    // which its descendents merge, which may be the node itself.
-    virtual Subchain ghostFindMergePoint(
-        const BlockHash &nodeKey,
-        Entry &activeNode,
-        /* force constrain?*/ Condition cond) = 0;
-
-    // attempts to find the containing node keys for the given hash and number.
-    //
-    // returns `None` if there is a node by that key already, and a vector
-    // (potentially empty) of nodes with the given block in its ancestor-edge
-    // otherwise.
-    virtual boost::optional<std::vector<BlockHash>> findContainingNodes(
-        const BlockInfo &block) = 0;
-
-    // introduce a branch to given vote-nodes.
-    //
-    // `descendents` is a list of nodes with ancestor-edges containing the given
-    // ancestor.
-    //
-    // This function panics if any member of `descendents` is not a vote-node
-    // or does not have ancestor with given hash and number OR if
-    // `ancestor_hash` is already a known entry.
-    virtual void introduceBranch(const std::vector<BlockHash> &descendents,
-                                 BlockHash ancestor,
-                                 BlockNumber ancestor_number) = 0;
-
-    // append a vote-node onto the chain-tree. This should only be called if
-    // no node in the tree keeps the target anyway.
-    virtual outcome::result<void> append(const BlockInfo &block,
-                                         std::shared_ptr<Chain> chain) = 0;
 
    protected:
     BlockInfo base_;
