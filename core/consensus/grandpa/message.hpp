@@ -37,6 +37,12 @@ namespace kagome::consensus::grandpa {
     std::vector<SignedPrecommit> items;
   };
 
+  template <class Stream,
+            typename = std::enable_if_t<Stream::is_encoder_stream>>
+  Stream &operator<<(Stream &s, const Justification &buffer) {
+    return s;  // TODO: implement
+  }
+
   // finalizing message or block B in round r
   struct Fin {
     RoundNumber round_number{0};

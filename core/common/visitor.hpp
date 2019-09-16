@@ -97,6 +97,21 @@ namespace kagome {
   constexpr decltype(auto) match_in_place(T &&t, Fs &&... fs) {
     return match(std::forward<T>(t), make_visitor(std::forward<Fs>(fs)...));
   }
+
+  /**
+   *
+   * @tparam T
+   * @tparam V
+   * @param variant
+   * @return
+   */
+  template <typename T, typename V>
+  boost::optional<T> getFromVariant(const V &variant) {
+    return visit_in_place(
+        variant,
+        [](const T &t) -> boost::optional<T> { return t; },
+        [](const auto &) -> boost::optional<T> { return boost::none; });
+  }
 }  // namespace kagome
 
 #endif  // KAGOME_VISITOR_HPP
