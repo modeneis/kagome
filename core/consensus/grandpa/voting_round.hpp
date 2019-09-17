@@ -25,7 +25,7 @@ namespace kagome::consensus::grandpa {
     virtual BlockInfo bestFinalCandidate(RoundNumber round) = 0;
 
     // executes algorithm 4.9 Attempt-To-Finalize-Round(r)
-    virtual void attemptToFinalizeRound(RoundNumber r) = 0;
+    virtual void tryFinalize() = 0;
   };
 
 }  // namespace kagome::consensus::grandpa
