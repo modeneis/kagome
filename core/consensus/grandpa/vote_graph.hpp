@@ -30,11 +30,7 @@ namespace kagome::consensus::grandpa {
 
     using Condition = std::function<bool(CumulativeVote)>;
 
-    explicit VoteGraph(const BlockInfo &base) : base_(base) {}
-
-    const auto &getBase() const {
-      return base_;
-    }
+    virtual const BlockInfo &getBase() const = 0;
 
     /// Insert a vote with given value into the graph at given hash and number.
     /// Increases cumulative vote by 1 for the given block
@@ -64,10 +60,6 @@ namespace kagome::consensus::grandpa {
                                                  Condition cond = [](auto &&) {
                                                    return true;
                                                  }) = 0;
-
-
-   protected:
-    BlockInfo base_;
   };
 
 }  // namespace kagome::consensus::grandpa
