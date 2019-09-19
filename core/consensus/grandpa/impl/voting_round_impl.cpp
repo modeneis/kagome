@@ -17,11 +17,13 @@ namespace kagome::consensus::grandpa {
       Duration duration,
       TimePoint start_time,
       MembershipCounter counter,
-      Id id,
+      RoundState last_round_state,
+      crypto::ED25519Keypair keypair,
       VoteGraph::CumulativeVote threshold,
       std::unique_ptr<VoteTracker> tracker,
       std::unique_ptr<VoteGraph> graph,
       std::shared_ptr<Gossiper> gossiper,
+      std::shared_ptr<crypto::ED25519Provider> ed_provider,
       std::shared_ptr<Clock> clock,
       std::shared_ptr<blockchain::BlockTree> block_tree,
       Timer timer,
@@ -31,12 +33,15 @@ namespace kagome::consensus::grandpa {
         duration_{duration},
         start_time_{start_time},
         counter_{counter},
-        id_{id},
+        last_round_state_{last_round_state},
+        keypair_{keypair},
+        id_{keypair_.public_key},
         state_{State::START},
         threshold_{threshold},
         tracker_{std::move(tracker)},
         graph_{std::move(graph)},
         gossiper_{std::move(gossiper)},
+        ed_provider_{std::move(ed_provider)},
         clock_{std::move(clock)},
         block_tree_{std::move(block_tree)},
         timer_{std::move(timer)},
@@ -44,6 +49,8 @@ namespace kagome::consensus::grandpa {
     BOOST_ASSERT(voters_ != nullptr);
     BOOST_ASSERT(tracker_ != nullptr);
     BOOST_ASSERT(graph_ != nullptr);
+    BOOST_ASSERT(gossiper_ != nullptr);
+    BOOST_ASSERT(ed_provider_ != nullptr);
     BOOST_ASSERT(clock_ != nullptr);
     BOOST_ASSERT(block_tree_ != nullptr);
 
@@ -69,24 +76,38 @@ namespace kagome::consensus::grandpa {
 
   void VotingRoundImpl::tryFinalize() {
     auto l = block_tree_->getLastFinalized();
-    auto e = bestFinalCandidate(round_number_);
 
-    if (e.block_number > l.block_number) {
+    //    auto e = bestFinalCandidate(round_number_);
+    auto e = graph_->findGhost(
+        last_round_state_.best_final_candidate,
+        [this](VoteGraph::CumulativeVote vote) { return vote > threshold_; });
+
+    if (not e) {
+      return;
+    }
+
+    if (last_round_state_.best_final_candidate.block_number > l.block_number) {
       if (graph_->findGhost(
-              e, [this](const VoteGraph::CumulativeVote &cumulative_vote) {
+              last_round_state_.best_final_candidate,
+              [this](const VoteGraph::CumulativeVote &cumulative_vote) {
                 return cumulative_vote > threshold_;
               })) {
-        auto justification = tracker_->getJustification(e);
+        auto justification = tracker_->getJustification(*e);
 
         primitives::Justification kagome_just{
             .data = common::Buffer{scale::encode(justification).value()}};
 
-        auto finalized = block_tree_->finalize(e.block_hash, kagome_just);
+        auto finalized = block_tree_->finalize(e->block_hash, kagome_just);
         if (not finalized) {
           logger_->warn("Could not finalize message during round {}. Error: {}",
                         round_number_,
                         finalized.error().message());
         }
+
+        // TODO (kamilsa): do not broadcast if fin message already received
+        gossiper_->fin(Fin{.vote = e.value(),
+                           .round_number = round_number_,
+                           .justification = justification});
       }
     }
   }
@@ -126,7 +147,7 @@ namespace kagome::consensus::grandpa {
       }
 
       case State::PRECOMMITTED: {
-        tryFinalize();
+        break;
       }
     }
   }
@@ -161,12 +182,11 @@ namespace kagome::consensus::grandpa {
       const SignedPrecommit &);
 
   bool VotingRoundImpl::completable() const {
-    auto find_supermajority = [](const std::vector<Prevote> &prevotes) {};
-
     if (tracker_->getPrecommits().size()
             + tracker_->getEquivocatoryVotes().size()
-        > (voters_->size() / 2) * 3) {
-      // todo
+        > threshold_ {
+      if (tracker_->getPrecommits().size()
+          - tracker_->getEquivocatoryVotes().size() -)
     }
 
     return true;
@@ -175,7 +195,7 @@ namespace kagome::consensus::grandpa {
   void VotingRoundImpl::playGrandpaRound() {
     auto primary = getPrimary();
     if (id_ == primary) {
-      gossiper_->fin(prepareFin(round_number_ - 1));
+      gossiper_->fin(preparePrevRoundFin());
     }
 
     timer_.expires_at(start_time_ + duration_ * 2);
@@ -192,9 +212,6 @@ namespace kagome::consensus::grandpa {
   }
 
   void VotingRoundImpl::findPrevote(const Id &primary) {
-    auto prev_round_best_final_candidate =
-        bestFinalCandidate(round_number_ - 1);  // L in spec
-
     auto prevotes = tracker_->getPrevotes();
 
     // check if we have prevote from primary
@@ -203,24 +220,25 @@ namespace kagome::consensus::grandpa {
 
     Prevote prevote;  // prevote that will be gossiped (N in spec)
 
-    // if primary has prevoted then we broadcast ghost (with not condition) from
+    // if primary has prevoted then we broadcast ghost (with no condition) from
     // that
     if (primary_prevote) {
       auto ghost_prevote = graph_->findGhost(primary_prevote->vote)
                                .value();  // (B^{r,pv}_v in spec)
 
       if (ghost_prevote.block_number >= primary_prevote->vote.block_number
-          > prev_round_best_final_candidate.block_number) {
+          and primary_prevote->vote.block_number
+                  > last_round_state_.best_final_candidate.block_number) {
         prevote = primary_prevote->vote;
         return gossipPrevote(signPrevote(prevote));
       }
     }
 
-    // otherwise broadcast best ancestor of bfc for previous round
-    auto ancestor =
-        graph_->findAncestor(prev_round_best_final_candidate).value();
-    prevote.block_hash = ancestor.block_hash;
-    prevote.block_number = ancestor.block_number;
+    // otherwise broadcast best descendent of bfc for previous round
+    auto target = block_tree_->finalityTarget(
+        last_round_state_.best_final_candidate.block_hash);
+    prevote.block_hash = target.block_hash;
+    prevote.block_number = target.block_number;
     return gossipPrevote(signPrevote(prevote));
   }
 
@@ -247,7 +265,7 @@ namespace kagome::consensus::grandpa {
 
   void VotingRoundImpl::findAndGossipPrecommit() {
     const BlockInfo &prev_round_best_final_candidate =
-        bestFinalCandidate(round_number_ - 1);
+        last_round_state_.best_final_candidate;
 
     auto opt_new_ghost =
         graph_->findGhost(prev_round_best_final_candidate,
@@ -291,20 +309,35 @@ namespace kagome::consensus::grandpa {
     return *prevote;
   }
 
-  VotingRoundImpl::signPrevote(const Prevote &prevote) const {
-    // TODO: implement
+  crypto::ED25519Signature VotingRoundImpl::voteSignature(
+      uint8_t stage, const BlockInfo &block_info) const {
+    auto payload =
+        scale::encode(stage, block_info, round_number_, counter_).value();
+    return ed_provider_->sign(keypair_, payload).value();
+  }
+
+  SignedPrevote VotingRoundImpl::signPrevote(const Prevote &prevote) const {
+    const static uint8_t prevote_stage = 0;
+
+    return SignedPrevote{.vote = prevote,
+                         .signer = id_,
+                         .signature = voteSignature(prevote_stage, prevote)};
   }
 
   SignedPrecommit VotingRoundImpl::signPrecommit(
       const Precommit &precommit) const {
-    // TODO implement
+    const static uint8_t precommit_stage = 1;
+
+    return SignedPrecommit{
+        .vote = precommit,
+        .signer = id_,
+        .signature = voteSignature(precommit_stage, precommit)};
   }
 
-  Fin VotingRoundImpl::prepareFin(
-      kagome::consensus::grandpa::RoundNumber number) {
+  Fin VotingRoundImpl::preparePrevRoundFin() const {
     Fin fin;
-    fin.round_number = number;
-    fin.vote = bestFinalCandidate(fin.round_number);
+    fin.round_number = round_number_ - 1;
+    fin.vote = last_round_state_.best_final_candidate;
     fin.justification = tracker_->getJustification(fin.vote);
     return fin;
   }

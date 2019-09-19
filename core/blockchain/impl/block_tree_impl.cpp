@@ -352,6 +352,12 @@ namespace kagome::blockchain {
     return tree_meta_->last_finalized.get().block_hash_;
   }
 
+  primitives::BlockInfo BlockTreeImpl::finalityTarget(
+      const primitives::BlockHash &target_hash) const {
+    // TODO: (kamilsa) implement
+    return primitives::BlockInfo{};
+  }
+
   void BlockTreeImpl::prune() {
     if (tree_meta_->last_finalized.get().parent_.expired()) {
       // nothing to prune

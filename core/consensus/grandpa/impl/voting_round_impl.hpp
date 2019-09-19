@@ -12,8 +12,10 @@
 #include "blockchain/block_tree.hpp"
 #include "common/logger.hpp"
 #include "consensus/grandpa/gossiper.hpp"
+#include "consensus/grandpa/round_state.hpp"
 #include "consensus/grandpa/vote_graph.hpp"
 #include "consensus/grandpa/vote_tracker.hpp"
+#include "crypto/ed25519_provider.hpp"
 
 namespace kagome::consensus::grandpa {
 
@@ -28,11 +30,13 @@ namespace kagome::consensus::grandpa {
                     Duration duration,
                     TimePoint start_time,
                     MembershipCounter counter,
-                    Id id,
+                    RoundState last_round_state,
+                    crypto::ED25519Keypair keypair,
                     VoteGraph::CumulativeVote threshold,
                     std::unique_ptr<VoteTracker> tracker,
                     std::unique_ptr<VoteGraph> graph,
                     std::shared_ptr<Gossiper> gossiper,
+                    std::shared_ptr<crypto::ED25519Provider> ed_provider,
                     std::shared_ptr<Clock> clock,
                     std::shared_ptr<blockchain::BlockTree> block_tree,
                     Timer timer,
@@ -54,10 +58,6 @@ namespace kagome::consensus::grandpa {
       return voters_->at(index);
     }
 
-    BlockInfo bestFinalCandidate(RoundNumber round) override {
-      return {};  // TODO(warchant): implement
-    };
-
    private:
     /**
      * @tparam VoteType – either SignedPrevote or SignedPrecommit
@@ -77,19 +77,26 @@ namespace kagome::consensus::grandpa {
 
     boost::optional<SignedPrevote> getPrevoteBy(const Id &authority) const;
 
+    crypto::ED25519Signature voteSignature(uint8_t stage,
+                                           const BlockInfo &block_info) const;
+
     SignedPrevote signPrevote(const Prevote &prevote) const;
 
     SignedPrecommit signPrecommit(const Precommit &precommit) const;
 
-    Fin prepareFin(RoundNumber number);
+    Fin preparePrevRoundFin() const;
+
+    Prevote getRoundPrevote() const;
 
    private:
     std::shared_ptr<VoterSet> voters_;
-    RoundNumber round_number_;
-    Duration duration_;  // length of round (T in spec)
-    TimePoint start_time_;
-    MembershipCounter counter_;
-    Id id_;  // id of current peer
+    const RoundNumber round_number_;
+    const Duration duration_;  // length of round (T in spec)
+    const TimePoint start_time_;
+    const MembershipCounter counter_;
+    RoundState last_round_state_;
+    const crypto::ED25519Keypair keypair_;
+    const Id id_;  // id of current peer
     State state_;
     VoteGraph::CumulativeVote threshold_;
 
@@ -97,6 +104,7 @@ namespace kagome::consensus::grandpa {
     std::unique_ptr<VoteGraph> graph_;
 
     std::shared_ptr<Gossiper> gossiper_;
+    std::shared_ptr<crypto::ED25519Provider> ed_provider_;
     std::shared_ptr<Clock> clock_;
     std::shared_ptr<blockchain::BlockTree> block_tree_;
 

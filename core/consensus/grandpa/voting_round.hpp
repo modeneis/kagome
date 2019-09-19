@@ -21,9 +21,6 @@ namespace kagome::consensus::grandpa {
     // returns Id of primary peer
     virtual Id getPrimary() const = 0;
 
-    //     executes algorithm 4.8 Best-Final-Candidate(r)
-    virtual BlockInfo bestFinalCandidate(RoundNumber round) = 0;
-
     // executes algorithm 4.9 Attempt-To-Finalize-Round(r)
     virtual void tryFinalize() = 0;
   };

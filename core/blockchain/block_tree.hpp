@@ -12,8 +12,8 @@
 #include <outcome/outcome.hpp>
 #include "primitives/block.hpp"
 #include "primitives/block_id.hpp"
-#include "primitives/justification.hpp"
 #include "primitives/common.hpp"
+#include "primitives/justification.hpp"
 
 namespace kagome::blockchain {
   /**
@@ -139,6 +139,13 @@ namespace kagome::blockchain {
      * @return hash of the block
      */
     virtual primitives::BlockInfo getLastFinalized() const = 0;
+
+    /**
+     * Get the best descendant of \param target_hash that we should attempt to
+     * finalize next
+     */
+    virtual primitives::BlockInfo finalityTarget(
+        const primitives::BlockHash &target_hash) const;
 
     /**
      * Prune the tree in both memory and storage, removing all blocks, which are
