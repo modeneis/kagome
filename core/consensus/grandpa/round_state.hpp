@@ -11,8 +11,9 @@
 namespace kagome::consensus::grandpa {
 
   struct RoundState {
-    Prevote prevote_ghost;
-    BlockInfo best_final_candidate;
+    boost::optional<Prevote> prevote_ghost;
+    boost::optional<BlockInfo> estimate;
+    boost::optional<BlockInfo> finalized;
   };
 
 }  // namespace kagome::consensus::grandpa

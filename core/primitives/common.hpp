@@ -22,6 +22,10 @@ namespace kagome::primitives {
   struct BlockInfo {
     BlockNumber block_number{};
     BlockHash block_hash;
+
+    inline bool operator==(const BlockInfo &rhs) const {
+      return block_hash == rhs.block_hash and block_number == rhs.block_number;
+    }
   };
 }  // namespace kagome::primitives
 

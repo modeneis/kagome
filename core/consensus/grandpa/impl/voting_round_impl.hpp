@@ -11,6 +11,7 @@
 #include <boost/asio/basic_waitable_timer.hpp>
 #include "blockchain/block_tree.hpp"
 #include "common/logger.hpp"
+#include "consensus/grandpa/chain.hpp"
 #include "consensus/grandpa/gossiper.hpp"
 #include "consensus/grandpa/round_state.hpp"
 #include "consensus/grandpa/vote_graph.hpp"
@@ -51,11 +52,23 @@ namespace kagome::consensus::grandpa {
 
     void onVoteMessage(const VoteMessage &vote_message) override;
 
-    void playGrandpaRound() override;
+    void primaryPropose(RoundState last_round_state);
 
-    Id getPrimary() const override {
+    void prevote(RoundState last_round_state);
+
+    void precommit(RoundState last_round_state);
+
+    outcome::result<SignedPrevote> constructPrevote(
+        RoundState last_round_state) const;
+
+    outcome::result<SignedPrecommit> constructPrecommit(
+        RoundState last_round_state) const;
+
+    void update();
+
+    bool isPrimary() const {
       auto index = round_number_ % voters_->size();
-      return voters_->at(index);
+      return voters_->at(index) == keypair_.public_key;
     }
 
    private:
@@ -72,6 +85,8 @@ namespace kagome::consensus::grandpa {
     void findPrevote(const Id &primary);
 
     void gossipPrevote(const SignedPrevote &prevote);
+
+    void gossipPrecommit(const SignedPrecommit &precommit);
 
     void findAndGossipPrecommit();
 
@@ -95,6 +110,7 @@ namespace kagome::consensus::grandpa {
     const TimePoint start_time_;
     const MembershipCounter counter_;
     RoundState last_round_state_;
+    RoundState cur_round_state_;
     const crypto::ED25519Keypair keypair_;
     const Id id_;  // id of current peer
     State state_;
@@ -107,10 +123,13 @@ namespace kagome::consensus::grandpa {
     std::shared_ptr<crypto::ED25519Provider> ed_provider_;
     std::shared_ptr<Clock> clock_;
     std::shared_ptr<blockchain::BlockTree> block_tree_;
+    std::shared_ptr<Chain> chain_;
 
     Timer timer_;
 
     common::Logger logger_;
+
+    boost::optional<BlockInfo> primaty_vote_;
   };
 }  // namespace kagome::consensus::grandpa
 

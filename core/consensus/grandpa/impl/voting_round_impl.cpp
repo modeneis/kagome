@@ -79,16 +79,16 @@ namespace kagome::consensus::grandpa {
 
     //    auto e = bestFinalCandidate(round_number_);
     auto e = graph_->findGhost(
-        last_round_state_.best_final_candidate,
+        last_round_state_.estimate,
         [this](VoteGraph::CumulativeVote vote) { return vote > threshold_; });
 
     if (not e) {
       return;
     }
 
-    if (last_round_state_.best_final_candidate.block_number > l.block_number) {
+    if (last_round_state_.estimate->block_number > l.block_number) {
       if (graph_->findGhost(
-              last_round_state_.best_final_candidate,
+              last_round_state_.estimate,
               [this](const VoteGraph::CumulativeVote &cumulative_vote) {
                 return cumulative_vote > threshold_;
               })) {
@@ -184,129 +184,239 @@ namespace kagome::consensus::grandpa {
   bool VotingRoundImpl::completable() const {
     if (tracker_->getPrecommits().size()
             + tracker_->getEquivocatoryVotes().size()
-        > threshold_ {
+        > threshold_) {
       if (tracker_->getPrecommits().size()
-          - tracker_->getEquivocatoryVotes().size() -)
+          - tracker_->getEquivocatoryVotes().size()) {
+      }
     }
 
     return true;
   }
 
-  void VotingRoundImpl::playGrandpaRound() {
-    auto primary = getPrimary();
-    if (id_ == primary) {
-      gossiper_->fin(preparePrevRoundFin());
-    }
+  void VotingRoundImpl::primaryPropose(RoundState last_round_state) {
+    switch (state_) {
+      case State::START: {
+        auto maybe_estimate = last_round_state.estimate;
 
-    timer_.expires_at(start_time_ + duration_ * 2);
-    timer_.async_wait([this, primary](auto &&ec) {
-      if (ec == boost::asio::error::operation_aborted) {
-        logger_->info("Prevote timer was interrupted in round {}",
-                      round_number_);
-      } else if (ec) {
-        logger_->error("Error happened during prevote timer: {}", ec.message());
-        return;
+        if (maybe_estimate and isPrimary()) {
+          auto maybe_finalized = last_round_state.finalized;
+
+          // we should send primary if last round's state contains finalized
+          // block and last round estimate is better than finalized block
+          bool should_send_primary =
+              maybe_finalized
+                  .map([&maybe_estimate](const BlockInfo &finalized) {
+                    return maybe_estimate->block_number
+                           > finalized.block_number;
+                  })
+                  .value_or(false);
+
+          if (should_send_primary) {
+            logger_->debug("Sending primary block hint for round {}",
+                           round_number_);
+            primaty_vote_ = maybe_estimate;
+
+            gossiper_->fin(Fin{.vote = primaty_vote_.value(),
+                               .round_number = round_number_ - 1,
+                               .justification = tracker_->getJustification(
+                                   maybe_estimate.value())});
+            state_ = State::PROPOSED;
+          }
+        } else {
+          logger_->debug(
+              "Last round estimate does not exist, not sending primary block "
+              "hint during round {}",
+              round_number_);
+        }
+        break;
       }
-      findPrevote(primary);
-    });
+      case State::PROPOSED:
+      case State::PREVOTED:
+      case State::PRECOMMITTED:
+        break;
+    }
   }
 
-  void VotingRoundImpl::findPrevote(const Id &primary) {
-    auto prevotes = tracker_->getPrevotes();
-
-    // check if we have prevote from primary
-    auto primary_prevote =
-        getPrevoteBy(primary);  // B in spec (line 7 of alg 4.7)
-
-    Prevote prevote;  // prevote that will be gossiped (N in spec)
-
-    // if primary has prevoted then we broadcast ghost (with no condition) from
-    // that
-    if (primary_prevote) {
-      auto ghost_prevote = graph_->findGhost(primary_prevote->vote)
-                               .value();  // (B^{r,pv}_v in spec)
-
-      if (ghost_prevote.block_number >= primary_prevote->vote.block_number
-          and primary_prevote->vote.block_number
-                  > last_round_state_.best_final_candidate.block_number) {
-        prevote = primary_prevote->vote;
-        return gossipPrevote(signPrevote(prevote));
-      }
-    }
-
-    // otherwise broadcast best descendent of bfc for previous round
-    auto target = block_tree_->finalityTarget(
-        last_round_state_.best_final_candidate.block_hash);
-    prevote.block_hash = target.block_hash;
-    prevote.block_number = target.block_number;
-    return gossipPrevote(signPrevote(prevote));
-  }
-
-  void VotingRoundImpl::gossipPrevote(const SignedPrevote &signed_prevote) {
-    VoteMessage message{.vote = signed_prevote,
-                        .round_number = round_number_,
-                        .counter = counter_,
-                        .id = id_};
-
-    gossiper_->vote(message);
-    state_ = State::PREVOTED;
-
-    // wait to receive prevotes precommit
-    timer_.expires_at(start_time_ + duration_ * 4);
-    timer_.async_wait([this](auto &&ec) {
+  void VotingRoundImpl::prevote(RoundState last_round_state) {
+    auto handle_prevote = [this, last_round_state](auto &&ec) {
       if (ec and ec != boost::asio::error::operation_aborted) {
         logger_->error("Error happened during precommit timer: {}",
                        ec.message());
         return;
       }
-      findAndGossipPrecommit();
-    });
+      switch (state_) {
+        case State::START:
+        case State::PROPOSED: {
+          auto prevote = constructPrevote(last_round_state);
+          if (prevote) {
+            gossipPrevote(prevote.value());
+          }
+          state_ = State::PREVOTED;
+          break;
+        }
+        case State::PREVOTED:
+        case State::PRECOMMITTED: {
+          break;
+        }
+      }
+    };
+    timer_.expires_at(start_time_ + duration_ * 2);
+    timer_.async_wait(handle_prevote);
+  };
+
+  void VotingRoundImpl::precommit(RoundState last_round_state) {
+    switch (state_) {
+      case State::PREVOTED: {
+        if (not last_round_state.estimate) {
+          logger_->warn("Rounds only started when prior round completable");
+          return;
+        }
+        auto last_round_estimate = last_round_state.estimate.value();
+
+        bool should_precommit =
+            cur_round_state_.prevote_ghost
+                .map([&](const BlockInfo &p_g) {
+                  return p_g == last_round_estimate
+                         or chain_->isEqualOrDescendOf(
+                             last_round_estimate.block_hash, p_g.block_hash);
+                })
+                .value_or(false);
+
+        if (should_precommit) {
+          logger_->debug("Casting precommit for round {}", round_number_);
+
+          auto precommit = constructPrecommit(last_round_state);
+
+          if (precommit) {
+            gossipPrecommit(precommit.value());
+          }
+          state_ = State::PRECOMMITTED;
+        }
+        break;
+      }
+      case State::START:
+      case State::PROPOSED:
+      case State::PRECOMMITTED:
+        break;
+    }
   }
 
-  void VotingRoundImpl::findAndGossipPrecommit() {
-    const BlockInfo &prev_round_best_final_candidate =
-        last_round_state_.best_final_candidate;
+  outcome::result<SignedPrevote> VotingRoundImpl::constructPrevote(
+      RoundState last_round_state) const {
+    if (not last_round_state.estimate) {
+      logger_->warn("Rounds only started when prior round completable");
+      return outcome::failure(boost::system::error_code());
+    }
+    auto last_round_estimate = last_round_state.estimate.value();
 
-    auto opt_new_ghost =
-        graph_->findGhost(prev_round_best_final_candidate,
-                          [this](VoteGraph::CumulativeVote cumulative_vote) {
-                            return cumulative_vote > threshold_;
-                          });
+    // find the block that we should take descendent from
+    auto find_descendent_of =
+        primaty_vote_
+            .map([&](const BlockInfo &primary) {
+              // if we have primary_vote then:
+              // if last prevote is the same as primary vote, then return it
+              // else if primary vote is better than last prevote return
+              auto last_prevote_g = last_round_state.prevote_ghost.value();
 
-    if (not opt_new_ghost) {
-      // nothing can be broadcasted
+              if (std::tie(primary.block_number, primary.block_hash)
+                  == std::tie(last_prevote_g.block_number,
+                              last_prevote_g.block_hash)) {
+                return primary;
+              } else if (primary.block_number >= last_prevote_g.block_number) {
+                return last_round_estimate;
+              }
+
+              // from this point onwards, the number of the primary-broadcasted
+              // block is less than the last prevote-GHOST's number.
+              // if the primary block is in the ancestry of p-G we vote for the
+              // best chain containing it.
+              if (auto ancestry =
+                      chain_->ancestry(last_round_estimate.block_hash,
+                                       last_prevote_g.block_hash);
+                  ancestry) {
+                auto to_sub = primary.block_number + 1;
+
+                auto offset = 0;
+                if (last_prevote_g.block_number >= to_sub) {
+                  offset = last_prevote_g.block_number - to_sub;
+                }
+
+                if (ancestry.value().at(offset) == primary.block_hash) {
+                  return primary;
+                }
+                return last_round_estimate;
+              } else {
+                return last_round_estimate;
+              }
+            })
+            .value_or_eval(
+                [last_round_estimate] { return last_round_estimate; });
+
+    auto best_chain =
+        chain_->bestChainContaining(find_descendent_of.block_hash);
+
+    if (not best_chain) {
+      logger_->error(
+          "Could not cast prevote: previousle known block {} has disappeared",
+          find_descendent_of.block_hash.toHex());
+      return outcome::failure(boost::system::error_code());
+    }
+
+    return signPrevote(Prevote{.block_hash = best_chain->block_hash,
+                               .block_number = best_chain->block_number});
+  }
+
+  outcome::result<SignedPrecommit> VotingRoundImpl::constructPrecommit(
+      RoundState last_round_state) const {
+    const auto &base = graph_->getBase();
+    const auto &target = cur_round_state_.prevote_ghost.value_or(Prevote{
+        .block_number = base.block_number, .block_hash = base.block_hash});
+
+    return signPrecommit(Precommit{.block_hash = target.block_hash,
+                                   .block_number = target.block_number});
+  }
+
+  void VotingRoundImpl::update() {
+    if (tracker_->prevoteWeight() < threshold_) {
       return;
     }
 
-    Precommit precommit;
-    precommit.block_number = opt_new_ghost->block_number;
-    precommit.block_hash = opt_new_ghost->block_hash;
+    auto total_weight = voters_->size();
 
-    SignedPrecommit signed_precommit = signPrecommit(precommit);
+    auto remaining_commit_votes = total_weight - tracker_->precommitWeight();
+    auto equivocators = tracker_->getEquivocatoryVotes();
 
-    VoteMessage message{.vote = signed_precommit,
-                        .id = id_,
-                        .counter = counter_,
-                        .round_number = round_number_};
+    if (not cur_round_state_.prevote_ghost) {
+      return;
+    }
 
-    gossiper_->vote(message);
-    state_ = State::PRECOMMITTED;
+    // anything new finalized? finalized blocks are those which have both
+    // 2/3+ prevote and precommit weight.
+    auto current_precommits = tracker_->precommitWeight();
+
+    if (current_precommits > threshold_) {
+      cur_round_state_.finalized =
+          graph_->findAncestor(cur_round_state_.prevote_ghost.value(),
+                               [this](VoteGraph::CumulativeVote vote_weight) {
+                                 return vote_weight > threshold_;
+                               });
+    }
   }
 
-  boost::optional<SignedPrevote> VotingRoundImpl::getPrevoteBy(
-      const Id &authority) const {
-    auto prevotes = tracker_->getPrevotes();
+  void VotingRoundImpl::gossipPrevote(const SignedPrevote &prevote) {
+    VoteMessage message{.vote = prevote,
+                        .round_number = round_number_,
+                        .counter = counter_,
+                        .id = id_};
+    gossiper_->vote(message);
+  }
 
-    // check if we have prevote from primary
-    auto prevote = boost::find_if(
-        prevotes, [&authority](const SignedPrevote &signed_prevote) {
-          return signed_prevote.signer == authority;
-        });
-
-    if (prevote == prevotes.end()) {
-      return boost::none;
-    }
-    return *prevote;
+  void VotingRoundImpl::gossipPrecommit(const SignedPrecommit &precommit) {
+    VoteMessage message{.vote = precommit,
+                        .round_number = round_number_,
+                        .counter = counter_,
+                        .id = id_};
+    gossiper_->vote(message);
   }
 
   crypto::ED25519Signature VotingRoundImpl::voteSignature(
@@ -337,7 +447,7 @@ namespace kagome::consensus::grandpa {
   Fin VotingRoundImpl::preparePrevRoundFin() const {
     Fin fin;
     fin.round_number = round_number_ - 1;
-    fin.vote = last_round_state_.best_final_candidate;
+    fin.vote = last_round_state_.estimate;
     fin.justification = tracker_->getJustification(fin.vote);
     return fin;
   }

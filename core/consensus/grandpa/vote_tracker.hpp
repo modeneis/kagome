@@ -28,6 +28,9 @@ namespace kagome::consensus::grandpa {
     virtual std::vector<SignedPrevote> getPrevotes() const = 0;
     virtual std::vector<SignedPrecommit> getPrecommits() const = 0;
 
+    virtual size_t prevoteWeight() const = 0;
+    virtual size_t precommitWeight() const = 0;
+
     // returns vector of all equivocatory votes for all blocks on round r
     virtual std::vector<EquivocatorySignedPrecommit> getEquivocatoryVotes()
         const = 0;

@@ -29,8 +29,7 @@ namespace kagome::consensus::grandpa {
   using TimePoint = Clock::TimePoint;
 
   enum class State {
-    START,
-    PREVOTED,
+    START, PROPOSED, PREVOTED,
     PRECOMMITTED
   };
 }
