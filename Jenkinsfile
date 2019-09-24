@@ -1,4 +1,4 @@
-dockerImage = 'soramitsu/kagome-dev:7'
+dockerImage = 'soramitsu/kagome-dev:8'
 workerLabel = 'd3-build-agent'
 buildDir = "/tmp/build"
 repository = "soramitsu/kagome"
@@ -49,7 +49,7 @@ def makeToolchainBuild(String name, String toolchain) {
 
 
 def makeCoverageBuild(String name){
-  return makeBuild(name, "-DCMAKE_TOOLCHAIN_FILE=cmake/toolchain/gcc-8_cxx17.cmake -DCOVERAGE=ON", {
+  return makeBuild(name, "-DCMAKE_TOOLCHAIN_FILE=cmake/toolchain/gcc-9_cxx17.cmake -DCOVERAGE=ON", {
     sh(script: "cmake --build ${buildDir} -- -j4")
 
     // submit coverage
@@ -60,21 +60,21 @@ def makeCoverageBuild(String name){
       sh(script: "./housekeeping/codecov.sh ${buildDir} ${codecov_token}")
     }
     sonar_option = ""
-      if (env.CHANGE_ID != null) {
-        sonar_option = "-Dsonar.github.pullRequest=${env.CHANGE_ID}"
-      }
-      // do analysis by sorabot
-      sh """
-        sonar-scanner \
-          -Dsonar.github.disableInlineComments=true \
-          -Dsonar.github.repository='${repository}' \
-          -Dsonar.projectKey=kagome \
-          -Dsonar.host.url=https://sonar.soramitsu.co.jp \
-          -Dsonar.login=${SONAR_TOKEN} \
-          -Dsonar.github.oauth=${sorabot_password} ${sonar_option} \
-          -Dsonar.cxx.coverage.reportPath=${buildDir}/ctest_coverage.xml \
-          -Dsonar.cxx.xunit.reportPath=${buildDir}/xunit/xunit*.xml
-      """
+    if (env.CHANGE_ID != null) {
+      sonar_option = "-Dsonar.github.pullRequest=${env.CHANGE_ID}"
+    }
+    // do analysis by sorabot
+    sh """
+      sonar-scanner \
+        -Dsonar.github.disableInlineComments=true \
+        -Dsonar.github.repository='${repository}' \
+        -Dsonar.projectVersion=${env.BRANCH_NAME} \
+        -Dsonar.login=${SONAR_TOKEN} \
+        -Dsonar.cxx.jsonCompilationDatabase=${buildDir}/compile_commands.json \
+        -Dsonar.github.oauth=${sorabot_password} ${sonar_option} \
+        -Dsonar.cxx.coverage.reportPath=${buildDir}/ctest_coverage.xml \
+        -Dsonar.cxx.xunit.reportPath=${buildDir}/xunit/xunit*.xml
+    """
   })
 }
 
@@ -86,30 +86,11 @@ def makeClangTidyBuild(String name){
 }
 
 def makeAsanBuild(String name){
-  return makeBuild(name, "-DCMAKE_TOOLCHAIN_FILE=cmake/toolchain/gcc-8_cxx17.cmake -DASAN=ON", {
+  return makeBuild(name, "-DCMAKE_TOOLCHAIN_FILE=cmake/toolchain/gcc-9_cxx17.cmake -DASAN=ON", {
     sh(script: "cmake --build ${buildDir} -- -j4")
     sh(script: "cmake --build ${buildDir} --target test")
   })
 }
-
-// def makeSonarScanner(String name){
-//   return makeBuild(name, "", {
-//       sonar_option = ""
-//       if (env.CHANGE_ID != null) {
-//         sonar_option = "-Dsonar.github.pullRequest=${env.CHANGE_ID}"
-//       }
-//       // do analysis by sorabot
-//       sh """
-//         sonar-scanner \
-//           -Dsonar.github.disableInlineComments=true \
-//           -Dsonar.github.repository='${repository}' \
-//           -Dsonar.projectKey=kagome \
-//           -Dsonar.host.url=https://sonar.soramitsu.co.jp \
-//           -Dsonar.login=${SONAR_TOKEN} \
-//           -Dsonar.github.oauth=${sorabot_password} ${sonar_option}
-//       """
-//   })
-// }
 
 node(workerLabel){
   try {
@@ -117,11 +98,10 @@ node(workerLabel){
       def builds = [:]
       // clang-tidy fails. see https://bugs.llvm.org/show_bug.cgi?id=42648
       // builds["clang-tidy"] = makeClangTidyBuild("clang-tidy")
-      builds["gcc-8 ASAN No Toolchain"] = makeAsanBuild("gcc-8 ASAN No Toolchain")
+      builds["gcc-9 ASAN No Toolchain"] = makeAsanBuild("gcc-9 ASAN No Toolchain")
       builds["clang-8 TSAN"] = makeToolchainBuild("clang-8 TSAN", "cmake/san/clang-8_cxx17_tsan.cmake")
       builds["clang-8 UBSAN"] = makeToolchainBuild("clang-8 UBSAN", "cmake/san/clang-8_cxx17_ubsan.cmake")
-      builds["gcc-8 coverage"] = makeCoverageBuild("gcc-8 coverage")
-      // builds["sonar Scanner"] = makeSonarScanner("sonar Scanner")
+      builds["gcc-9 coverage/sonar"] = makeCoverageBuild("gcc-9 coverage/sonar")
 
       parallel(builds)
     }
