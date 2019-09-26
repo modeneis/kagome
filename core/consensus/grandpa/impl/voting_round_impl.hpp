@@ -13,7 +13,6 @@
 #include "common/logger.hpp"
 #include "consensus/grandpa/chain.hpp"
 #include "consensus/grandpa/gossiper.hpp"
-#include "consensus/grandpa/round_state.hpp"
 #include "consensus/grandpa/vote_graph.hpp"
 #include "consensus/grandpa/vote_tracker.hpp"
 #include "crypto/ed25519_provider.hpp"
@@ -33,7 +32,7 @@ namespace kagome::consensus::grandpa {
                     MembershipCounter counter,
                     RoundState last_round_state,
                     crypto::ED25519Keypair keypair,
-                    VoteGraph::CumulativeVote threshold,
+                    size_t threshold,
                     std::unique_ptr<VoteTracker> tracker,
                     std::unique_ptr<VoteGraph> graph,
                     std::shared_ptr<Gossiper> gossiper,
@@ -43,35 +42,20 @@ namespace kagome::consensus::grandpa {
                     Timer timer,
                     common::Logger logger = common::createLogger("Grandpa"));
 
-    static VoteGraph::CumulativeVote getThreshold(
-        const std::shared_ptr<VoterSet> &voters);
-
     void onFin(const Fin &f) override;
 
     void tryFinalize() override;
 
     void onVoteMessage(const VoteMessage &vote_message) override;
 
-    void primaryPropose(RoundState last_round_state);
-
-    void prevote(RoundState last_round_state);
-
-    void precommit(RoundState last_round_state);
-
-    outcome::result<SignedPrevote> constructPrevote(
-        RoundState last_round_state) const;
-
-    outcome::result<SignedPrecommit> constructPrecommit(
-        RoundState last_round_state) const;
+    void playGrandpaRound(const RoundState &last_round_state) override;
 
     void update();
 
-    bool isPrimary() const {
-      auto index = round_number_ % voters_->size();
-      return voters_->at(index) == keypair_.public_key;
-    }
-
    private:
+    bool isPrimary() const;
+
+    size_t getThreshold(const std::shared_ptr<VoterSet> &voters);
     /**
      * @tparam VoteType – either SignedPrevote or SignedPrecommit
      * @param vote – vote is pushed to tracker if it is not equivocated vote and
@@ -82,15 +66,21 @@ namespace kagome::consensus::grandpa {
 
     bool completable() const;
 
-    void findPrevote(const Id &primary);
+    void primaryPropose(const RoundState &last_round_state);
+
+    void prevote(const RoundState &last_round_state);
+
+    void precommit(const RoundState &last_round_state);
+
+    outcome::result<SignedPrevote> constructPrevote(
+        const RoundState &last_round_state) const;
+
+    outcome::result<SignedPrecommit> constructPrecommit(
+        const RoundState &last_round_state) const;
 
     void gossipPrevote(const SignedPrevote &prevote);
 
     void gossipPrecommit(const SignedPrecommit &precommit);
-
-    void findAndGossipPrecommit();
-
-    boost::optional<SignedPrevote> getPrevoteBy(const Id &authority) const;
 
     crypto::ED25519Signature voteSignature(uint8_t stage,
                                            const BlockInfo &block_info) const;
@@ -114,7 +104,7 @@ namespace kagome::consensus::grandpa {
     const crypto::ED25519Keypair keypair_;
     const Id id_;  // id of current peer
     State state_;
-    VoteGraph::CumulativeVote threshold_;
+    size_t threshold_;
 
     std::unique_ptr<VoteTracker> tracker_;
     std::unique_ptr<VoteGraph> graph_;
@@ -130,6 +120,7 @@ namespace kagome::consensus::grandpa {
     common::Logger logger_;
 
     boost::optional<BlockInfo> primaty_vote_;
+    bool completable_{false};
   };
 }  // namespace kagome::consensus::grandpa
 

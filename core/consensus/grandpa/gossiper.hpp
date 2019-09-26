@@ -9,7 +9,7 @@
 #include <functional>
 
 #include <outcome/outcome.hpp>
-#include "consensus/grandpa/message.hpp"
+#include "consensus/grandpa/structs.hpp"
 
 namespace kagome::consensus::grandpa {
 
@@ -22,7 +22,7 @@ namespace kagome::consensus::grandpa {
 
     virtual void vote(const VoteMessage &msg) = 0;
 
-    virtual void fin(const Fin& fin) = 0;
+    virtual void fin(const Fin &fin) = 0;
   };
 
 }  // namespace kagome::consensus::grandpa

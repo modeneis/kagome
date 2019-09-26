@@ -20,8 +20,6 @@ namespace kagome::consensus::grandpa {
   using RoundNumber = uint64_t;
   using MembershipCounter = uint64_t;
 
-  using BlockInfo = primitives::BlockInfo;
-
   using VoterSet = std::vector<Id>;
 
   using Clock = clock::SystemClock ;

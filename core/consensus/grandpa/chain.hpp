@@ -10,7 +10,8 @@
 
 #include <boost/optional.hpp>
 #include <outcome/outcome.hpp>
-#include "consensus/grandpa/message.hpp"
+#include "consensus/grandpa/common.hpp"
+#include "consensus/grandpa/structs.hpp"
 
 namespace kagome::consensus::grandpa {
 
@@ -31,15 +32,13 @@ namespace kagome::consensus::grandpa {
      * block hash, even if that block is {@param base} itself. If base is
      * unknown, return None.
      */
-    virtual boost::optional<BlockInfo> bestChainContaining(
-        BlockHash base) = 0;
+    virtual boost::optional<BlockInfo> bestChainContaining(BlockHash base) = 0;
 
     /**
      * @returns true if {@param block} is a descendent of or equal to the
      * given {@param base}.
      */
-    bool isEqualOrDescendOf(BlockHash base,
-                            BlockHash block) {
+    inline bool isEqualOrDescendOf(BlockHash base, BlockHash block) {
       return base == block ? true : ancestry(base, block).has_value();
     }
   };

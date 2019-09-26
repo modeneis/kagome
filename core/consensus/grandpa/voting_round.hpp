@@ -6,9 +6,8 @@
 #ifndef KAGOME_CORE_CONSENSUS_GRANDPA_VOTING_ROUND_HPP
 #define KAGOME_CORE_CONSENSUS_GRANDPA_VOTING_ROUND_HPP
 
-#include "consensus/grandpa/common.hpp"
-#include "message.hpp"
-#include "round_observer.hpp"
+#include "consensus/grandpa/round_observer.hpp"
+#include "consensus/grandpa/round_state.hpp"
 
 namespace kagome::consensus::grandpa {
 
@@ -16,10 +15,7 @@ namespace kagome::consensus::grandpa {
     ~VotingRound() override = default;
 
     // executes algorithm 4.7 Play-Grandpa-Round(r)
-    virtual void playGrandpaRound() = 0;
-
-    // returns Id of primary peer
-    virtual Id getPrimary() const = 0;
+    virtual void playGrandpaRound(const RoundState &last_round_state) = 0;
 
     // executes algorithm 4.9 Attempt-To-Finalize-Round(r)
     virtual void tryFinalize() = 0;

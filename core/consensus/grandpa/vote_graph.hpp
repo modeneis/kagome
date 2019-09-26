@@ -7,41 +7,65 @@
 #define KAGOME_CORE_CONSENSUS_GRANDPA_VOTE_GRAPH_HPP
 
 #include "consensus/grandpa/chain.hpp"
-#include "consensus/grandpa/message.hpp"
+#include "consensus/grandpa/vote_weight.hpp"
 
 namespace kagome::consensus::grandpa {
 
   struct VoteGraph {
-    using CumulativeVote = uint32_t;
     // graph entry
     struct Entry {
       BlockNumber number;
+      BlockHash hash;
       std::vector<BlockHash> ancestors;
       std::vector<BlockHash> descendents;
-      CumulativeVote cumulative_vote;
+      VoteWeight cumulative_vote;
+
+      // Get ancestor block by number. Returns `None` if there is no block
+      // by that number in the direct ancestry.
+      boost::optional<BlockHash> getAncestorBlockBy(BlockNumber n) {
+        if (n >= number) {
+          return boost::none;
+        }
+        const auto offset = number - n - 1;
+        return ancestors.at(offset);
+      }
+
+      boost::optional<BlockHash> getLastAncestor() {
+        if (ancestors.empty()) {
+          return boost::none;
+        }
+        // return last ancestor
+        return ancestors[ancestors.size() - 1];
+      }
     };
 
     struct Subchain {
-      std::vector<BlockHash> hashes;
-      BlockNumber best_number;
+      std::vector<primitives::BlockHash> hashes;
+      primitives::BlockNumber best_number;
     };
 
     virtual ~VoteGraph() = default;
 
-    using Condition = std::function<bool(CumulativeVote)>;
+    using Condition = std::function<bool(const VoteWeight &)>;
 
     virtual const BlockInfo &getBase() const = 0;
 
+    /// Adjust the base of the graph. The new base must be an ancestor of the
+    /// old base.
+    ///
+    /// Provide an ancestry proof from the old base to the new. The proof
+    /// should be in reverse order from the old base's parent.
+    virtual void adjustBase(
+        std::vector<primitives::BlockHash> ancestry_proof) = 0;
+
     /// Insert a vote with given value into the graph at given hash and number.
-    /// Increases cumulative vote by 1 for the given block
-    virtual outcome::result<void> insert(const BlockInfo &block
-                                         /*vote weight */) = 0;
+    virtual outcome::result<void> insert(const BlockInfo &block,
+                                         const VoteWeight &vote) = 0;
 
     /// Find the highest block which is either an ancestor of or equal to the
     /// given, which fulfills a condition.
-    virtual boost::optional<BlockInfo> findAncestor(
-        const BlockInfo &block,
-        Condition cond = [](auto &&) { return true; }) = 0;
+    virtual boost::optional<BlockInfo> findAncestor(const BlockInfo &block,
+                                                    Condition cond) = 0;
 
     /// Find the best GHOST descendent of the given block.
     /// Pass a closure used to evaluate the cumulative vote value.
@@ -57,9 +81,15 @@ namespace kagome::consensus::grandpa {
     /// Returns `None` when the given `current_best` does not fulfill the
     /// condition.
     virtual boost::optional<BlockInfo> findGhost(const BlockInfo &current_best,
-                                                 Condition cond = [](auto &&) {
-                                                   return true;
-                                                 }) = 0;
+                                                 Condition cond) = 0;
+
+    // given a key, node pair (which must correspond), assuming this node
+    // fulfills the condition, this function will find the highest point at
+    // which its descendents merge, which may be the node itself.
+    virtual Subchain ghostFindMergePoint(
+        const primitives::BlockHash &nodeKey,
+        Entry &activeNode,
+        /* force constrain?*/ Condition cond) = 0;
   };
 
 }  // namespace kagome::consensus::grandpa
