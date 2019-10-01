@@ -16,11 +16,15 @@ namespace kagome::consensus::grandpa {
     boost::dynamic_bitset<> precommits;
 
     auto &operator+=(const VoteWeight &vote) {
-      // TODO(warchant): implement
+      prevotes |= vote.prevotes;
+      precommits |= vote.precommits;
       return *this;
     }
 
-    TotalWeight totalWeight() {}
+    TotalWeight totalWeight() const {
+      return TotalWeight{.prevote = prevotes.count(),
+                         .precommit = precommits.count()};
+    }
   };
 
 }  // namespace kagome::consensus::grandpa

@@ -20,8 +20,6 @@
 namespace kagome::consensus::grandpa {
 
   class VotingRoundImpl : public VotingRound {
-    using Timer = boost::asio::basic_waitable_timer<std::chrono::system_clock>;
-
    public:
     ~VotingRoundImpl() override = default;
 
@@ -50,8 +48,6 @@ namespace kagome::consensus::grandpa {
 
     void playGrandpaRound(const RoundState &last_round_state) override;
 
-    void update();
-
    private:
     bool isPrimary() const;
 
@@ -63,6 +59,8 @@ namespace kagome::consensus::grandpa {
      */
     template <typename VoteType>
     void onVote(const VoteType &vote);
+
+    void update();
 
     bool completable() const;
 
@@ -82,16 +80,13 @@ namespace kagome::consensus::grandpa {
 
     void gossipPrecommit(const SignedPrecommit &precommit);
 
+    template <typename VoteType>
     crypto::ED25519Signature voteSignature(uint8_t stage,
-                                           const BlockInfo &block_info) const;
+                                           const VoteType &vote_type) const;
 
     SignedPrevote signPrevote(const Prevote &prevote) const;
 
     SignedPrecommit signPrecommit(const Precommit &precommit) const;
-
-    Fin preparePrevRoundFin() const;
-
-    Prevote getRoundPrevote() const;
 
    private:
     std::shared_ptr<VoterSet> voters_;

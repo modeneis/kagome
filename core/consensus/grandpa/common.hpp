@@ -6,10 +6,10 @@
 #ifndef KAGOME_CORE_CONSENSUS_GRANDPA_COMMON_HPP
 #define KAGOME_CORE_CONSENSUS_GRANDPA_COMMON_HPP
 
-#include "primitives/common.hpp"
-#include "common/wrapper.hpp"
 #include "clock/clock.hpp"
+#include "common/wrapper.hpp"
 #include "crypto/ed25519_types.hpp"
+#include "primitives/common.hpp"
 
 namespace kagome::consensus::grandpa {
 
@@ -22,14 +22,11 @@ namespace kagome::consensus::grandpa {
 
   using VoterSet = std::vector<Id>;
 
-  using Clock = clock::SystemClock ;
+  using Clock = clock::SteadyClock;
   using Duration = Clock::Duration;
   using TimePoint = Clock::TimePoint;
 
-  enum class State {
-    START, PROPOSED, PREVOTED,
-    PRECOMMITTED
-  };
-}
+  enum class State { START, PROPOSED, PREVOTED, PRECOMMITTED };
+}  // namespace kagome::consensus::grandpa
 
 #endif  // KAGOME_CORE_CONSENSUS_GRANDPA_COMMON_HPP

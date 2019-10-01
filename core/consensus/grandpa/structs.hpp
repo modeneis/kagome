@@ -7,8 +7,10 @@
 #define KAGOME_CORE_CONSENSUS_GRANDPA_STRUCTS_HPP
 
 #include <boost/asio/steady_timer.hpp>
+#include <boost/variant.hpp>
 #include "common/blob.hpp"
 #include "common/wrapper.hpp"
+#include "consensus/grandpa/common.hpp"
 #include "crypto/ed25519_types.hpp"
 #include "primitives/common.hpp"
 
@@ -41,8 +43,8 @@ namespace kagome::consensus::grandpa {
   namespace detail {
     template <typename Tag>
     struct BlockInfoT {
-      primitives::BlockNumber number{};
-      primitives::BlockHash hash;
+      primitives::BlockNumber block_number{};
+      primitives::BlockHash block_hash;
     };
 
     /// Proof of an equivocation (double-vote) in a given round.
@@ -71,6 +73,11 @@ namespace kagome::consensus::grandpa {
   struct Justification {
     std::vector<SignedPrecommit> items;
   };
+  template <class Stream,
+            typename = std::enable_if_t<Stream::is_encoder_stream>>
+  Stream &operator<<(Stream &s, const Justification &v) {
+    return s;
+  }
 
   /// A commit message which is an aggregate of precommits.
   struct Commit {
