@@ -65,15 +65,15 @@ namespace kagome::crypto {
   bool VRFProviderImpl::verify(const common::Buffer &msg,
                                const VRFOutput &output,
                                const SR25519PublicKey &public_key) const {
-    std::array<uint8_t, vrf_constants::OUTPUT_SIZE> out_array =
-        common::uint256_t_to_bytes(output.value);
 
     auto res = sr25519_vrf_verify(public_key.data(),
                                   msg.data(),
                                   msg.size(),
-                                  out_array.data(),
+                                  output.output,
                                   output.proof.data());
     return res == Sr25519SignatureResult::Ok;
   }
+
+  bool check()
 
 }  // namespace kagome::crypto

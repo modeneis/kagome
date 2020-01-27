@@ -18,7 +18,8 @@ namespace kagome::consensus {
       : validator_{std::move(validator)},
         sync_clients_{std::move(sync_clients)},
         tree_{std::move(tree)},
-        epoch_storage_{std::move(epoch_storage)} {
+        epoch_storage_{std::move(epoch_storage)},
+        logger_{common::createLogger("BabeObserver")} {
     BOOST_ASSERT(validator_);
     BOOST_ASSERT(sync_clients_);
     BOOST_ASSERT(tree_);
@@ -38,15 +39,22 @@ namespace kagome::consensus {
       // TODO(akvinikym) 04.09.19: probably some logic should be done here - we
       // cannot validate block without an epoch, but still it needs to be
       // inserted
+      logger_->error("Epoch does not exist");
       return;
     }
 
     auto validation_res = validator_->validate(block, *epoch_opt);
     if (validation_res) {
       // the block was inserted to the tree by a validator
+      logger_->info("Block with number {} was inserted into the storage",
+                    block.header.number);
       return;
     }
 
+    logger_->error(
+        "Block with number {} was not inserted into the storage. Reason: {}",
+        block.header.number,
+        validation_res.error().message());
     if (validation_res.error() != blockchain::BlockTreeError::NO_PARENT) {
       // pure validation error, the block is invalid
       return;
